@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentrix AI | Enterprise Code Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        :root { --p-indigo: #6366f1; --p-emerald: #10b981; --p-amber: #f59e0b; --p-rose: #f43f5e; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.3s ease; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .dark { background-color: #09090b; color: #fafafa; }
+        .light { background-color: #f8fafc; color: #0f172a; }
+        
+        /* Mobile Specific Fixes */
+        @media (max-width: 768px) {
+            .mobile-drawer { transform: translateX(-100%); transition: transform 0.3s ease; position: fixed; top: 0; left: 0; height: 100%; z-index: 100; width: 80%; background: #18181b; }
+            .mobile-drawer.active { transform: translateX(0); }
+            .editor-container { height: 60vh !important; }
+        }
+        
+        .shimmer { background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.2), transparent); background-size: 200% 100%; animation: shimmer 2s infinite; }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    </style>
+</head>
+<body class="dark h-screen flex flex-col overflow-hidden">
+
+    <nav class="flex items-center justify-between px-4 md:px-6 py-3 border-b border-zinc-800 glass z-50">
+        <div class="flex items-center gap-3">
+            <button onclick="toggleMobileMenu()" class="md:hidden p-2 hover:bg-zinc-800 rounded-lg"><i data-lucide="menu"></i></button>
+            <div class="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-xl flex items-center justify-center"><i data-lucide="cpu" class="text-white w-5 h-5"></i></div>
+            <h1 class="text-lg md:text-xl font-bold tracking-tight">Zentrix <span id="modelBadge" class="text-indigo-500 text-sm ml-2 px-2 py-0.5 bg-indigo-500/10 rounded-md border border-indigo-500/20">DeepSeek R1</span></h1>
+        </div>
+
+        <div class="flex items-center gap-2 md:gap-4">
+            <button onclick="toggleTheme()" class="p-2 hover:bg-zinc-800 rounded-lg border border-zinc-800"><i id="themeIcon" data-lucide="moon" class="w-5 h-5"></i></button>
+            <button onclick="toggleSettings()" class="p-2 hover:bg-zinc-800 rounded-lg border border-zinc-800"><i data-lucide="settings" class="w-5 h-5"></i></button>
+            <button onclick="showLoginModal()" class="hidden md:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium transition-all"><i data-lucide="user" class="w-4 h-4"></i> Login</button>
+        </div>
+    </nav>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        <aside id="sidebar" class="mobile-drawer md:relative md:transform-none md:w-72 border-r border-zinc-800 p-6 flex flex-col gap-8 overflow-y-auto">
+            <div class="flex md:hidden justify-between items-center mb-4">
+                <span class="font-bold">Controls</span>
+                <button onclick="toggleMobileMenu()"><i data-lucide="x"></i></button>
+            </div>
+            
+            <div>
+                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Model Cluster</label>
+                <div id="modelList" class="mt-4 space-y-2">
+                    </div>
+            </div>
+
+            <div>
+                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Security Stabilizers</label>
+                <div class="mt-4 space-y-3">
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <span class="text-xs text-zinc-300">IntelliScan 2.0</span>
+                        <div class="w-8 h-4 bg-indigo-600 rounded-full relative"><div class="absolute right-1 top-1 w-2 h-2 bg-white rounded-full"></div></div>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                        <span class="text-xs text-zinc-300">Sandbox Shield</span>
+                        <div class="w-8 h-4 bg-emerald-600 rounded-full relative"><div class="absolute right-1 top-1 w-2 h-2 bg-white rounded-full"></div></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col p-4 md:p-6 gap-4 relative bg-zinc-950/20">
+            <div id="editor" class="flex-1 rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl editor-container"></div>
+            
+            <div class="w-full max-w-4xl mx-auto">
+                <div class="glass p-1.5 rounded-2xl flex items-center gap-2 border border-zinc-700/50 shadow-2xl">
+                    <input id="promptInput" type="text" placeholder="Build a scientific calculator in Python..." class="flex-1 bg-transparent border-none outline-none px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500">
+                    <button onclick="handleGeneration()" id="genBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 md:px-8 py-3 rounded-xl flex items-center gap-2 font-bold transition-all disabled:opacity-50">
+                        <span id="btnText">Execute</span>
+                        <i data-lucide="zap" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <div id="settingsPanel" class="fixed inset-y-0 right-0 w-full md:w-96 glass border-l border-zinc-800 z-[100] translate-x-full transition-transform duration-300 p-8">
+            <div class="flex items-center justify-between mb-8">
+                <h2 class="text-2xl font-bold">Settings</h2>
+                <button onclick="toggleSettings()" class="p-2 hover:bg-zinc-800 rounded-lg"><i data-lucide="x"></i></button>
+            </div>
+            <div class="space-y-6">
+                <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
+                    <p class="text-xs text-zinc-500 uppercase mb-2">Authenticated As</p>
+                    <p class="font-bold flex items-center gap-2"><i data-lucide="user" class="w-4 h-4 text-indigo-400"></i> Guest_Developer_88</p>
+                </div>
+                <div class="space-y-4">
+                    <p class="text-sm font-semibold text-indigo-400">UI Customization</p>
+                    <button class="w-full text-left p-3 bg-zinc-900 rounded-lg border border-zinc-800 text-sm">Font: JetBrains Mono (v2.3)</button>
+                    <button class="w-full text-left p-3 bg-zinc-900 rounded-lg border border-zinc-800 text-sm">Glassmorphism: Ultra (80%)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const models = [
+            { id: 'deepseek-r1', name: 'DeepSeek R1', icon: 'sparkles', color: 'indigo' },
+            { id: 'gemini', name: 'Gemini 2.0 Flash', icon: 'zap', color: 'emerald' },
+            { id: 'claude', name: 'Claude 3.5 Sonnet', icon: 'ghost', color: 'amber' },
+            { id: 'gpt', name: 'GPT-4o Engine', icon: 'cpu', color: 'rose' },
+            { id: 'ensemble', name: 'Zentrix Ensemble', icon: 'layers', color: 'violet' }
+        ];
+
+        let activeModel = 'deepseek-r1';
+        let editor;
+
+        // Initialize Monaco
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+        require(['vs/editor/editor.main'], () => {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: "# Zentrix Code Engine v2.0\n# Waiting for mission parameters...\n",
+                language: 'python', theme: 'vs-dark', fontSize: 14, fontFamily: 'JetBrains Mono',
+                automaticLayout: true, minimap: { enabled: false }, roundedSelection: true
+            });
+        });
+
+        // Render Models
+        function renderModels() {
+            const list = document.getElementById('modelList');
+            list.innerHTML = models.map(m => `
+                <button onclick="selectModel('${m.id}')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${activeModel === m.id ? `bg-${m.color}-500/10 border-${m.color}-500 text-${m.color}-400` : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 text-zinc-400'}">
+                    <span class="flex items-center gap-3 text-xs font-semibold"><i data-lucide="${m.icon}" class="w-4 h-4"></i> ${m.name}</span>
+                    ${activeModel === m.id ? '<i data-lucide="check" class="w-3 h-3"></i>' : ''}
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function selectModel(id) {
+            activeModel = id;
+            const model = models.find(m => m.id === id);
+            const badge = document.getElementById('modelBadge');
+            badge.innerText = model.name;
+            badge.className = `text-${model.color}-500 text-sm ml-2 px-2 py-0.5 bg-${model.color}-500/10 rounded-md border border-${model.color}-500/20`;
+            renderModels();
+        }
+
+        async function handleGeneration() {
+            const prompt = document.getElementById('promptInput').value;
+            if(!prompt) return;
+
+            const btn = document.getElementById('genBtn');
+            const editorEl = document.getElementById('editor');
+            btn.disabled = true;
+            document.getElementById('btnText').innerText = "Processing...";
+            editorEl.classList.add('shimmer');
+
+            try {
+                // Point to your Render Backend
+                const response = await fetch('https://zentrix-ec0u.onrender.com/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        prompt: prompt, 
+                        model: activeModel,
+                        language: "python" 
+                    })
+                });
+                const data = await response.json();
+                if(data.code) editor.setValue(data.code);
+            } catch (e) {
+                editor.setValue("# ERROR: Backend connection failed.\n# Ensure your Render URL is active and API keys are set.");
+            } finally {
+                btn.disabled = false;
+                document.getElementById('btnText').innerText = "Execute";
+                editorEl.classList.remove('shimmer');
+            }
+        }
+
+        function toggleMobileMenu() { document.getElementById('sidebar').classList.toggle('active'); }
+        function toggleSettings() { document.getElementById('settingsPanel').classList.toggle('translate-x-full'); }
+        function toggleTheme() {
+            const isDark = document.body.classList.toggle('dark');
+            document.body.classList.toggle('light');
+            monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+            document.getElementById('themeIcon').setAttribute('data-lucide', isDark ? 'moon' : 'sun');
+            lucide.createIcons();
+        }
+        function showLoginModal() { alert("Zentrix Auth: Secure handshake initiated. Login service is active."); }
+
+        renderModels();
+        lucide.createIcons();
+    </script>
+</body>
+</html>
