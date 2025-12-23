@@ -1,0 +1,2 @@
+# Zentrix
+Ai code generator
